@@ -1,0 +1,13 @@
+-- block.script
+go.property("color", hash("none"))
+
+function init(self)
+	go.set_scale(0.1)        -- render scaled down
+
+	if self.color ~= nil then
+		msg.post("#sprite", "play_animation", { id = self.color })
+	else
+		msg.post("#sprite", "disable")
+	end
+end
+

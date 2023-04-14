@@ -1,0 +1,19 @@
+[bootstrap]
+main_collection = /main/board.collectionc
+
+[script]
+shared_state = 1
+
+[display]
+width = 640
+height = 960
+
+[android]
+input_method = HiddenInputField
+
+[project]
+title = ele-and-ali
+
+[sprite]
+max_count = 512
+

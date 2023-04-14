@@ -1,0 +1,5 @@
+-- connector.script
+function init(self)
+	go.set_scale(0.18)              -- Set the scale of this game object.
+	go.set(".", "position.z", 1)    -- Put on top.
+end
