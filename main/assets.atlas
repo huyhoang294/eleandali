@@ -1,61 +1,61 @@
 images {
-  image: "/images/blue-orb-1.png"
+  image: "/images/orb-blue.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/blue-orb-4.png"
+  image: "/images/orb-blue-low.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/blue-orb-6.png"
+  image: "/images/orb-blue-high.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/dark-blue-orb-2.png"
+  image: "/images/orb-dark-blue.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/dark-blue-orb-3.png"
+  image: "/images/orb-dark-blue-low.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/dark-blue-orb-5.png"
+  image: "/images/orb-dark-blue-high.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/green-orb-1.png"
+  image: "/images/orb-green.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/green-orb-2.png"
+  image: "/images/orb-green-low.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/green-orb-3.png"
+  image: "/images/orb-green-high.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/red-orb-1.png"
+  image: "/images/orb-red.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/red-orb-2.png"
+  image: "/images/orb-red-low.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/red-orb-3.png"
+  image: "/images/orb-red-high.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/yellow-orb-1.png"
+  image: "/images/orb-yellow.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/yellow-orb-2.png"
+  image: "/images/orb-yellow-low.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/yellow-orb-3.png"
+  image: "/images/orb-yellow-high.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
@@ -64,6 +64,10 @@ images {
 }
 images {
   image: "/images/background.png"
+  sprite_trim_mode: SPRITE_TRIM_MODE_OFF
+}
+images {
+  image: "/images/magic-sphere_layer3.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 margin: 0

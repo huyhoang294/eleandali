@@ -1,13 +1,87 @@
 -- block.script
 go.property("color", hash("none"))
 
+local normal_scale = 0.1		-- The normal render size
+local zoomed_scale = 0.12		-- When interacted with, zoom to this
+
+local colors = { 
+	[hash("dark-blue")] = "dark-blue", 
+	[hash("red")] = "red", 
+	[hash("blue")] = "blue", 
+	[hash("yellow")] = "yellow",
+	[hash("green")] = "green" 
+}
+
+local energy_none = hash("none")
+local energy_low = hash("low")
+local energy_high = hash("high")
+
 function init(self)
-	go.set_scale(0.1)        -- render scaled down
+	self.rot = go.get_rotation()
+	go.set_scale(normal_scale)        -- render scaled down
 
 	if self.color ~= nil then
-		msg.post("#sprite", "play_animation", { id = self.color })
+		-- All orb are created with no energy
+		local c = colors[self.color]
+		msg.post("#sprite", "play_animation", { id = hash("orb-" .. c) })
 	else
 		msg.post("#sprite", "disable")
+	end
+end
+
+function final(self)
+	if self.fx1 ~= nil then
+		go.delete(self.fx1)
+	end
+
+	if self.fx2 ~= nil then
+		go.delete(self.fx2)
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("respawn") then
+		go.set_position(message.position)
+		msg.post("#sprite", "enable")
+		local c = colors[message.color]
+		if message.type == energy_low then
+			c = "orb-" .. c .. "-low"
+		elseif message.type == energy_high then
+			c = "orb-" .. c .. "-high"
+		end
+		msg.post("#sprite", "play_animation", { id = hash(c) })
+	elseif message_id == hash("zoom_and_wobble") then
+		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, zoomed_scale, go.EASING_INOUTSINE, 0.1, 0.18)
+		local rot = go.get(".", "euler.z")
+		local r = math.random() / 50
+		go.cancel_animations(".", "euler.z")
+		go.animate(".", "euler.z", go.PLAYBACK_LOOP_PINGPONG, rot - 4, go.EASING_INOUTSINE, 0.1 + r, 0.18)
+	elseif message_id == hash("reset") then
+		go.cancel_animations(".", "scale")
+		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, normal_scale, go.EASING_INOUTSINE, 0.1)
+		go.cancel_animations(".", "euler.z")
+		go.set_rotation(self.rot)
+	elseif message_id == hash("remove") then
+		go.delete()
+-- 	elseif message_id == hash("make_magic") then
+-- 		self.color = hash("magic")
+-- 		msg.post("#sprite", "enable")
+-- 		msg.post("#sprite", "play_animation", { id = hash("magic-sphere_layer1") })
+-- 		self.fx1 = factory.create("#fxfactory", p, nil, { direction = hash("left") })
+-- 		self.fx2 = factory.create("#fxfactory", p, nil, { direction = hash("right") })
+-- 
+-- 		msg.post(self.fx1, "set_parent", { parent_id = go.get_id() })
+-- 		msg.post(self.fx2, "set_parent", { parent_id = go.get_id() })
+-- 
+-- 		go.set(self.fx1, "position.z", 0.01)
+-- 		go.set(self.fx1, "scale", 1)
+-- 		go.set(self.fx2, "position.z", 0.02)
+-- 		go.set(self.fx2, "scale", 1)
+		
+	-- elseif message_id == hash("lights_on") or message_id == hash("lights_off") then
+	-- 	msg.post(self.fx1, message_id)
+	-- 	msg.post(self.fx2, message_id)
+	-- 
 	end
 end
 

@@ -6,116 +6,15 @@ local bottom_edge = 85      -- Bottom edge.
 local boardwidth = 6        -- Number of columns
 local boardheight = 10       -- Number of rows
 local centeroff = vmath.vector3(8, -8, 0) -- Center offset for connector gfx since there's shadow below in the block img
-local dropamount = 3        -- The number of blocks dropped on a "drop"
-local colors = { hash("dark-blue-orb-2"), hash("red-orb-1"), hash("blue-orb-1"), hash("yellow-orb-1"), hash("green-orb-1") }
 
---
--- This function will allow us to filter lists of items (blocks).
--- filter(function, table)
--- e.g: filter(is_even, {1,2,3,4}) -> {2,4}
---
-local function filter(func, tbl)
-	local new = {}
-	for i, v in pairs(tbl) do
-		if func(v) then
-			new[i] = v
-		end
-	end
-	return new
-end
+local colors = { hash("dark-blue"), hash("red"), hash("blue"), hash("yellow"), hash("green") }
 
---
--- Build a list of blocks in 1 dimension for easy filtering
--- Creates a list of all blocks on the board laid out as a flat list, which allows us to filter it.
---
-local function build_blocklist(self)
-	self.blocks = {}
-	for x, l in pairs(self.board) do
-		for y, b in pairs(self.board[x]) do
-			table.insert(self.blocks, { id = b.id, color = b.color, x = b.x, y = b.y })
-		end
-	end
-end
+local energy_none = hash("none")
+local energy_low = hash("low")
+local energy_high = hash("high")
 
---
--- Returns a list of neighbor blocks of the same color as the
--- block on x, y
---
-local function same_color_neighbors(self, x, y)
-	local f = function (v)
-		return (v.id ~= self.board[x][y].id) and
-		(v.x == x or v.x == x - 1 or v.x == x + 1) and
-		(v.y == y or v.y == y - 1 or v.y == y + 1) and
-		(v.color == self.board[x][y].color)
-	end
-	return filter(f, self.blocks)
-end
-
---
--- Does the block exist in the list of blocks?
---
-local function in_blocklist(blocks, block)
-	for i, b in pairs(blocks) do
-		if b.id == block then
-			return true
-		end
-	end
-	return false
-end
-
--- Remove the currently selected block-chain
---
-local function remove_chain(self)
-	-- Delete all chained blocks
-	for i, c in ipairs(self.chain) do
-		self.board[c.x][c.y] = hash("removing")
-		go.delete(c.id)
-	end
-	self.chain = {}
-end
-
---
--- Set removed blocks to nil
---
-local function nilremoved(self)
-	for y = 0,boardheight - 1 do
-		for x = 0,boardwidth - 1 do
-			if self.board[x][y] == hash("removing") then
-				self.board[x][y] = nil
-			end
-		end
-	end
-end
-
---
--- Apply shift-down logic to all blocks.
---
-local function slide_board(self)
-	-- Slide all remaining blocks down into blank spots.
-	-- Going column by column makes this easy.
-	local dy = 0
-	local pos = vmath.vector3()
-	for x = 0,boardwidth - 1 do
-		dy = 0
-		for y = 0,boardheight - 1 do
-			if self.board[x][y] ~= nil then
-				if dy > 0 then
-					-- Move down dy steps
-					self.board[x][y - dy] = self.board[x][y]
-					self.board[x][y] = nil
-					-- Calc new position
-					self.board[x][y - dy].y = self.board[x][y - dy].y - dy
-					go.animate(self.board[x][y-dy].id, "position.y", go.PLAYBACK_ONCE_FORWARD, bottom_edge + blocksize / 2 + blocksize * (y - dy), go.EASING_OUTBOUNCE, 0.3)
-					-- Calc new z
-					go.set(self.board[x][y-dy].id, "position.z", x * -0.1 + (y-dy) * 0.01)
-				end
-			else
-				dy = dy + 1
-			end
-		end
-	end
-	-- blocklist needs updating
-	build_blocklist(self)
+local function has_energy(orb)
+	return orb.type == energy_low or orb.type == energy_high
 end
 
 --
@@ -124,146 +23,363 @@ end
 function init(self)
 	self.board = {}             -- Contains the board structure
 	self.blocks = {}            -- List of all blocks. Used for easy filtering on selection.
-	self.chain = {}             -- Current selection chain
+	self.link = {}             -- Current selection chain
 	self.connectors = {}        -- Connector elements to mark the selection chain
-	self.num_magic = 3          -- Number of magic blocks on the board
-	self.drops = 1              -- Number of drops you have available
-	self.magic_blocks = {}      -- Magic blocks that are lined up
 	self.dragging = false       -- Drag touch input
 	msg.post(".", "acquire_input_focus")
 	msg.post("#", "start_level")
 end
 
 local function build_board(self)
+	local board = {}
 	math.randomseed(os.time())
 	local pos = vmath.vector3()
-	local c
 	local x = 0
 	local y = 0
+	local c -- color
 	for x = 0,boardwidth-1 do
 		pos.x = edge + blocksize / 2 + blocksize * x
-		self.board[x] = {}
+		board[x] = {}
 		for y = 0,boardheight-1 do
 			pos.y = bottom_edge + blocksize / 2 + blocksize * y
-			-- Calc z
-			pos.z = x * -0.1 + y * 0.01 -- <1>
 			c = colors[math.random(#colors)]    -- Pick a random color
+			local energy_state = energy_none
 			local id = factory.create("#blockfactory", pos, null, { color = c })
-			self.board[x][y] = { id = id, color = c,  x = x, y = y }
+			board[x][y] = { id = id, color = c,  x = x, y = y, state = energy_state }
 		end
 	end
 
-	-- Build 1d list that we can easily filter.
-	build_blocklist(self)
+	return board
+end
+
+--
+-- Apply shift-down logic to all slots on the board, then
+-- call the callback.
+--
+local function collapse_board(board, callback)
+	local duration = 0.3
+	--
+	-- Slide all remaining blocks down into blank (nil) spots.
+	-- Going column by column makes this easy.
+	--
+	-- Avoid some garbage creation by reusing these locals 
+	-- through the loops
+	--
+	local dy = 0
+	local pos = vmath.vector3()
+	for x = 0,boardwidth - 1 do
+		--
+		-- Reset the drop down distance for each column
+		--
+		dy = 0
+		for y = 0,boardheight - 1 do
+			if board[x][y] ~= nil then
+				if dy > 0 then
+					--
+					-- Move down dy steps
+					--
+					board[x][y - dy] = board[x][y]
+					board[x][y] = nil
+					--
+					-- Calc new position and animate
+					---
+					board[x][y - dy].y = board[x][y - dy].y - dy
+					go.animate(board[x][y-dy].id, "position.y", go.PLAYBACK_ONCE_FORWARD, bottom_edge + blocksize / 2 + blocksize * (y - dy), go.EASING_OUTBOUNCE, duration)
+				end
+			else
+				--
+				-- Empty slot - increase the distance to move
+				--
+				dy = dy + 1
+			end
+		end
+	end
+
+	go.animate("#", "timer", go.PLAYBACK_ONCE_FORWARD, 1, go.EASING_LINEAR, duration, 0, callback)	
+end
+
+--
+-- Return an iterator function for all non-empty slots
+--
+local function iterate_orbs(board)
+	local x = 0
+	local y = -1
+	return function()
+		repeat
+			y = y + 1
+			if x == boardwidth - 1 and y == boardheight then
+				return nil
+			end
+
+			if y == boardheight then
+				y = 0
+				x = x + 1
+			end
+		until board[x][y]
+		return board[x][y]
+	end
+end
+
+--
+-- Remove a single block from the board
+--
+local function remove_block(board, block)
+	if not board[block.x][block.y] then
+		-- the block has already been removed
+		-- this can happen when we remove a match and a line blast or
+		-- other special block effect takes place at the same time
+		return
+	end
+
+	msg.post(block.id, "remove")
+	--
+	-- Empty slots are set to nil so we can find them
+	--
+	board[block.x][block.y] = nil
+
+	--
+	-- low energy blast
+	--
+	if block.type == energy_low then
+		for x = block.x - 1, block.x + 1 do
+			for y = block.y - 1, block.y + 1 do
+				if board[x] and board[x][y] then
+					remove_block(board, board[x][y])
+				end
+			end
+		end
+	--
+	-- high energy blast
+	--
+	elseif block.type == energy_high then
+		for x=0, boardwidth -1 do
+			if board[x][block.y] then
+				remove_block(board, board[x][block.y])
+			end
+		end
+		for y=0, boardheight -1 do
+			if board[block.x][y] then
+				remove_block(board, board[block.x][y])
+			end
+		end
+	end
+end
+
+--
+-- Remove a list of block from the board
+--
+local function remove_blocks(board, blocks)
+	for _,block in pairs(blocks) do
+		remove_block(board, block)
+	end
+end
+
+--
+-- Change type and color of an existing block
+-- Use this when converting blocks into other types due
+-- to a match of some kind
+-- Will clear list of neighbors
+--
+local function respawn(block, type, color)
+	block.color = color
+	block.type = type
+	block.neighbors_vertical = {}
+	block.neighbors_horisontal = {}
+	msg.post(block.id, "respawn", { color = block.color, type = block.type, position = go.get_position(block.id) })
+end
+
+--
+-- Remove all block in a link
+--
+local function remove_link(board, link, callback)
+	-- reset the animation on all block in the link
+	for _,slot in pairs(link) do
+		msg.post(slot.id, "reset")
+	end
+	-- ignore short links
+	if #link < 3 then
+		callback()
+		return
+	-- create special orb of the link is long enough
+	elseif #link == 4 then
+		local block = table.remove(link)
+		respawn(block, energy_low, block.color)
+	elseif  #link >= 5 then
+		local block = table.remove(link)
+		respawn(block, energy_high, block.color)
+	end
+	-- remove block and wait before invoking callback
+	remove_blocks(board, link)
+	local duration = 0.3
+	go.animate("#", "timer", go.PLAYBACK_ONCE_FORWARD, 1, go.EASING_LINEAR, duration, 0, callback)
+end
+
+
+--
+-- Add a slot to the link
+--
+local function add_to_link(self, x, y)
+	-- outside board or empty
+	if x < 0 or x >= boardwidth or y < 0 or y >= boardheight or self.board[x][y] == nil then
+		return
+	end
+
+	local slot = self.board[x][y]
+
+	-- add the first slot to the link without any checks
+	if #self.link == 0 then
+		msg.post(slot.id, "zoom_and_wobble")
+		table.insert(self.link, slot)
+		return
+	end
+
+	local last = self.link[#self.link]
+	local previous = self.link[#self.link - 1]
+	local distance = math.max(math.abs(last.x - x), math.abs(last.y - y))
+	-- don't add the same slot more than once and don't add slots that are too far away
+	if distance ~= 1 then
+		return
+	end
+	-- don't add slots of a different color
+	if last.color ~= slot.color then
+		return
+	end
+	-- going back to the previous link
+	-- remove the last slot of the link
+	if previous == slot then
+		self.link[#self.link] = nil
+		msg.post(last.id, "reset")
+		return
+	end
+	-- don't try to add the same slot twice
+	for i=1,#self.link do
+		if self.link[i] == slot then
+			return
+		end
+	end	
+	-- the new slot is ok, add it
+	msg.post(slot.id, "zoom_and_wobble")
+	table.insert(self.link, slot)
+end
+
+
+-- 
+-- Find and return any empty slots.
+--
+local function empty_slots(board)
+	local slots = {}
+	for x = 0, boardwidth - 1 do
+		for y = 0, boardheight - 1 do
+			if board[x][y] == nil then
+				--
+				-- The slot is nil/empty so we store this position in the
+				-- list of slots that we will return
+				--
+				table.insert(slots, { x = x, y = y })
+			end
+		end
+	end
+	return slots
+end
+
+--
+-- Drop spawned block to the board. Target the supplied slots. 
+-- When done, call callback.
+--
+local function fill_slots(board, empty_slots, callback)
+	local duration = 0.3
+	--
+	-- Go through the list of empty slots and drop a (reused) block
+	-- game object into its position.
+	--
+	local pos = vmath.vector3()	-- Reuse through loop
+	for i, s in pairs(empty_slots) do
+		--
+		-- Calc the x position of this slot
+		--
+		pos.x = edge + blocksize / 2 + blocksize * s.x
+		--
+		-- Start above the screen so we can animate into place
+		-- 
+		pos.y = 1000
+		--
+		-- Pick a random block
+		--
+		local color = colors[math.random(#colors)]
+		local type = energy_none
+		--
+		-- Create a new block game object
+		--
+		local id = factory.create("#blockfactory", pos, null, { color = color })
+		--
+		-- Animate into the slot's calculated y position
+		--
+		go.animate(id, "position.y", go.PLAYBACK_ONCE_FORWARD, bottom_edge + blocksize / 2 + blocksize * s.y, go.EASING_OUTBOUNCE, duration)
+		--
+		-- Store the new data in the slot (it was nil)
+		--
+		board[s.x][s.y] = { id = id, type = type, color = color, x = s.x, y = s.y }
+	end
+
+	go.animate("#", "timer", go.PLAYBACK_ONCE_FORWARD, 1, go.EASING_LINEAR, duration, 0, callback)
 end
 
 function on_message(self, message_id, message, sender)
 	if message_id == hash("start_level") then
-		build_board(self)
-	end
-end
+		--
+		-- Create a new random board
+		--
+		self.board = build_board()
+	elseif message_id == hash("post-reaction") then
+		--
+		-- Collapse any remaining slots
+		--
+		collapse_board(self.board, function ()
+			--
+			-- Find empty slots
+			--
+			local s = empty_slots(self.board)
 
-function on_input(self, action_id, action)
-	if action_id == hash("touch") and action.value == 1 then
-		-- What block was touched or dragged over?
-		local x = math.floor((action.x - edge) / blocksize)
-		local y = math.floor((action.y - bottom_edge) / blocksize)
-
-		if x < 0 or x >= boardwidth or y < 0 or y >= boardheight or self.board[x][y] == nil then
-			-- outside board.
-			return
-		end
-
-		-- If trying to manipulate magic blocks, ignore.
-		if self.board[x][y].color == hash("magic") then
-			return
-		end
-
-		if action.pressed then
-			-- List of neighbors of the same color as touched block
-			self.neighbors = same_color_neighbors(self, x, y)
-			self.chain = {}
-			table.insert(self.chain, self.board[x][y])
-
-			-- Mark block.
-			p = go.get_position(self.board[x][y].id)
-			local id = factory.create("#connectorfactory", p + centeroff)
-			table.insert(self.connectors, id)
-
-			self.dragging = true
-		elseif self.dragging then
-			-- then drag
-			if in_blocklist(self.neighbors, self.board[x][y].id) and not in_blocklist(self.chain, self.board[x][y].id) then
-				-- dragging over a same-colored neighbor
-				table.insert(self.chain, self.board[x][y])
-				self.neighbors = same_color_neighbors(self, x, y)
-
-				-- Mark block.
-				p = go.get_position(self.board[x][y].id)
-				local id = factory.create("#connectorfactory", p + centeroff)
-				table.insert(self.connectors, id)
+			--
+			-- If there are empty slots, fill them.
+			--
+			if #s > 0 then
+				fill_slots(self.board, s, function ()
+					--
+					-- After filling
+					--
+				end)
 			end
-		end
-	elseif action_id == hash("touch") and action.released then
-		-- Player released touch.
-		self.dragging = false
-
-		if #self.chain > 1 then
-			-- There is a chain of blocks. Remove it from board and slide the remaining blocks down.
-			remove_chain(self)
-			nilremoved(self)
-			slide_board(self)
-		end
-
-		-- Empty chain of connector graphics.
-		for i, c in ipairs(self.connectors) do
-			go.delete(c)
-		end
-		self.connectors = {}
+		end)
 	end
 end
--- function final(self)
--- 	-- Add finalization code here
--- 	-- Learn more: https://defold.com/manuals/script/
--- 	-- Remove this function if not needed
--- end
--- 
--- function update(self, dt)
--- 	-- Add update code here
--- 	-- Learn more: https://defold.com/manuals/script/
--- 	-- Remove this function if not needed
--- end
--- 
--- function fixed_update(self, dt)
--- 	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
--- 	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
--- 	-- Physics section of game.project
--- 	-- Add update code here
--- 	-- Learn more: https://defold.com/manuals/script/
--- 	-- Remove this function if not needed
--- end
--- 
--- function on_message(self, message_id, message, sender)
--- 	-- Add message-handling code here
--- 	-- Learn more: https://defold.com/manuals/message-passing/
--- 	-- Remove this function if not needed
--- end
--- 
--- function on_input(self, action_id, action)
--- 	-- Add input-handling code here. The game object this script is attached to
--- 	-- must have acquired input focus:
--- 	--
--- 	--    msg.post(".", "acquire_input_focus")
--- 	--
--- 	-- All mapped input bindings will be received. Mouse and touch input will
--- 	-- be received regardless of where on the screen it happened.
--- 	-- Learn more: https://defold.com/manuals/input/
--- 	-- Remove this function if not needed
--- end
--- 
--- function on_reload(self)
--- 	-- Add reload-handling code here
--- 	-- Learn more: https://defold.com/manuals/hot-reload/
--- 	-- Remove this function if not needed
--- end
--- 
+
+--
+-- INPUT HANDLING
+--
+function on_input(self, action_id, action)
+	if action_id == hash("touch") then
+		--
+		-- What block was touched?
+		--
+		local x = math.floor((action.x - edge) / blocksize)
+		local y = math.floor((action.y - edge) / blocksize)
+
+		--
+		-- Try to add it to the link
+		--
+		add_to_link(self, x, y)
+
+		-- Start linking
+		if action.pressed then
+			self.linking = true
+			-- Stop linking remove link
+		elseif action.released then
+			remove_link(self.board, self.link, function()
+				self.linking = false
+				self.link = {}
+				msg.post("#", "post-reaction")
+			end)
+		end
+	end
+end
