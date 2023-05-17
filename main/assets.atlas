@@ -59,7 +59,7 @@ images {
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
-  image: "/images/selector.png"
+  image: "/images/orb-empty.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
@@ -68,6 +68,10 @@ images {
 }
 images {
   image: "/images/magic-sphere_layer3.png"
+  sprite_trim_mode: SPRITE_TRIM_MODE_OFF
+}
+images {
+  image: "/images/board.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 margin: 0

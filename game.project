@@ -1,5 +1,5 @@
 [bootstrap]
-main_collection = /main/board.collectionc
+main_collection = /main/main.collectionc
 
 [script]
 shared_state = 1
@@ -16,4 +16,7 @@ title = ele-and-ali
 
 [sprite]
 max_count = 512
+
+[library]
+include_dirs = https://github.com/Insality/druid/archive/master.zip
 

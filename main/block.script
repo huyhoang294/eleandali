@@ -15,27 +15,20 @@ local colors = {
 local energy_none = hash("none")
 local energy_low = hash("low")
 local energy_high = hash("high")
+local empty = hash("empty")
 
 function init(self)
 	self.rot = go.get_rotation()
 	go.set_scale(normal_scale)        -- render scaled down
 
-	if self.color ~= nil then
+	if self.color ~= nil or self.color ~= "empty" then
 		-- All orb are created with no energy
 		local c = colors[self.color]
 		msg.post("#sprite", "play_animation", { id = hash("orb-" .. c) })
+	elseif self.color == "empty" then
+		msg.post("#sprite", "play_animation", { id = hash("orb-" .. empty) })
 	else
 		msg.post("#sprite", "disable")
-	end
-end
-
-function final(self)
-	if self.fx1 ~= nil then
-		go.delete(self.fx1)
-	end
-
-	if self.fx2 ~= nil then
-		go.delete(self.fx2)
 	end
 end
 
@@ -63,25 +56,6 @@ function on_message(self, message_id, message, sender)
 		go.set_rotation(self.rot)
 	elseif message_id == hash("remove") then
 		go.delete()
--- 	elseif message_id == hash("make_magic") then
--- 		self.color = hash("magic")
--- 		msg.post("#sprite", "enable")
--- 		msg.post("#sprite", "play_animation", { id = hash("magic-sphere_layer1") })
--- 		self.fx1 = factory.create("#fxfactory", p, nil, { direction = hash("left") })
--- 		self.fx2 = factory.create("#fxfactory", p, nil, { direction = hash("right") })
--- 
--- 		msg.post(self.fx1, "set_parent", { parent_id = go.get_id() })
--- 		msg.post(self.fx2, "set_parent", { parent_id = go.get_id() })
--- 
--- 		go.set(self.fx1, "position.z", 0.01)
--- 		go.set(self.fx1, "scale", 1)
--- 		go.set(self.fx2, "position.z", 0.02)
--- 		go.set(self.fx2, "scale", 1)
-		
-	-- elseif message_id == hash("lights_on") or message_id == hash("lights_off") then
-	-- 	msg.post(self.fx1, message_id)
-	-- 	msg.post(self.fx2, message_id)
-	-- 
 	end
 end
 
