@@ -55,6 +55,9 @@ function on_message(self, message_id, message, sender)
 		go.cancel_animations(".", "euler.z")
 		go.set_rotation(self.rot)
 	elseif message_id == hash("remove") then
+		factory.create("/board#explosion", go.get_position())
+		sound.play("#boom")
+		particlefx.play("#explode")
 		go.delete()
 	end
 end

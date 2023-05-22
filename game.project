@@ -20,3 +20,11 @@ max_count = 512
 [library]
 include_dirs = https://github.com/Insality/druid/archive/master.zip
 
+[sound]
+max_component_count = 300
+max_sound_buffers = 300
+
+[particle_fx]
+max_count = 300
+max_emitter_count = 300
+

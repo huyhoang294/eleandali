@@ -1,6 +1,8 @@
 -- main.script
 function init(self)
 	msg.post("#", "to_main_menu")
+
+	sound.play("/main#background")
 	self.state = "MAIN_MENU"
 end
 
