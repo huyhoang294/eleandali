@@ -20,7 +20,7 @@ local empty = hash("empty")
 function init(self)
 	self.rot = go.get_rotation()
 	go.set_scale(normal_scale)        -- render scaled down
-
+	msg.post("#", "sway")
 	if self.color ~= nil or self.color ~= "empty" then
 		-- All orb are created with no energy
 		local c = colors[self.color]
@@ -42,6 +42,7 @@ function on_message(self, message_id, message, sender)
 		elseif message.type == energy_high then
 			c = "orb-" .. c .. "-high"
 		end
+		factory.create("/board#respawn", go.get_position())
 		msg.post("#sprite", "play_animation", { id = hash(c) })
 	elseif message_id == hash("zoom_and_wobble") then
 		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, zoomed_scale, go.EASING_INOUTSINE, 0.1, 0.18)
@@ -49,11 +50,18 @@ function on_message(self, message_id, message, sender)
 		local r = math.random() / 50
 		go.cancel_animations(".", "euler.z")
 		go.animate(".", "euler.z", go.PLAYBACK_LOOP_PINGPONG, rot - 4, go.EASING_INOUTSINE, 0.1 + r, 0.18)
+	elseif message_id == hash("sway") then
+		local rot = go.get(".", "euler.z")
+		go.set(".", "euler.z", rot - 1)
+		local t = (math.random() * 2) + 2
+		go.cancel_animations(".", "euler.z")
+		go.animate(".", "euler.z", go.PLAYBACK_LOOP_PINGPONG, rot + 1, go.EASING_INOUTQUAD, t)
 	elseif message_id == hash("reset") then
 		go.cancel_animations(".", "scale")
 		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, normal_scale, go.EASING_INOUTSINE, 0.1)
 		go.cancel_animations(".", "euler.z")
 		go.set_rotation(self.rot)
+		msg.post("#", "sway")
 	elseif message_id == hash("remove") then
 		factory.create("/board#explosion", go.get_position())
 		sound.play("#boom")
